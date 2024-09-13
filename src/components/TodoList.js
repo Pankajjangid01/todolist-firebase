@@ -6,39 +6,38 @@ import {
   updateDoc,
   doc,
 } from "firebase/firestore";
-import { db } from "../firebase"; // Import Firestore db from firebase.js
+import { db } from "../firebase"; 
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 
 const TodoList = () => {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState("");
+  const auth = getAuth();
 
-  // Fetch tasks from Firestore
-  const fetchTasks = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "tasks"));
-      const fetchedTasks = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setTasks(fetchedTasks);
-    } catch (error) {
-      console.error("Error fetching tasks: ", error);
+  const fetchTasks = async (user) => {
+    if (user) {
+      try {
+        const querySnapshot = await getDocs(collection(db, `users/${user.uid}/tasks`));
+        const fetchedTasks = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setTasks(fetchedTasks);
+      } catch (error) {
+        console.error("Error fetching tasks: ", error);
+      }
     }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  // Add a new task with default "low" priority
   const addTask = async () => {
-    if (newTask.trim()) {
+    const user = getAuth().currentUser; 
+    if (newTask.trim() && user) {
       try {
-        await addDoc(collection(db, "tasks"), {
+        await addDoc(collection(db, `users/${user.uid}/tasks`), {
           title: newTask,
           priority: "low",
         });
-        fetchTasks(); // Refresh the list after adding a task
+        fetchTasks(user);
         setNewTask("");
       } catch (error) {
         console.error("Error adding task: ", error);
@@ -46,7 +45,6 @@ const TodoList = () => {
     }
   };
 
-  // Handle drag and drop for task priority
   const handleDragStart = (event, taskId) => {
     event.dataTransfer.setData("taskId", taskId);
   };
@@ -54,20 +52,33 @@ const TodoList = () => {
   const handleDrop = async (event, newPriority) => {
     event.preventDefault();
     const taskId = event.dataTransfer.getData("taskId");
-
-    // Update task's priority in Firestore
-    try {
-      const taskRef = doc(db, "tasks", taskId);
-      await updateDoc(taskRef, { priority: newPriority });
-      fetchTasks();
-    } catch (error) {
-      console.error("Error updating task priority: ", error);
+    const user = getAuth().currentUser; 
+    if (user && taskId) {
+      try {
+        const taskRef = doc(db, `users/${user.uid}/tasks`, taskId); 
+        await updateDoc(taskRef, { priority: newPriority });
+        fetchTasks(user); 
+      } catch (error) {
+        console.error("Error updating task priority: ", error);
+      }
     }
   };
 
   const allowDrop = (event) => {
     event.preventDefault();
   };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchTasks(user); 
+      } else {
+        setTasks([]); 
+      }
+    });
+
+    return () => unsubscribe(); 
+  }, [auth]);
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-50 to-indigo-100 p-8">
