@@ -6,18 +6,22 @@ import {
   updateDoc,
   doc,
 } from "firebase/firestore";
-import { db } from "../firebase"; 
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { db } from "../firebase";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom"; // Add this for navigation
 
 const TodoList = () => {
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState("");
   const auth = getAuth();
+  const navigate = useNavigate(); // Initialize useNavigate
 
   const fetchTasks = async (user) => {
     if (user) {
       try {
-        const querySnapshot = await getDocs(collection(db, `users/${user.uid}/tasks`));
+        const querySnapshot = await getDocs(
+          collection(db, `users/${user.uid}/tasks`)
+        );
         const fetchedTasks = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -30,7 +34,7 @@ const TodoList = () => {
   };
 
   const addTask = async () => {
-    const user = getAuth().currentUser; 
+    const user = getAuth().currentUser;
     if (newTask.trim() && user) {
       try {
         await addDoc(collection(db, `users/${user.uid}/tasks`), {
@@ -52,12 +56,12 @@ const TodoList = () => {
   const handleDrop = async (event, newPriority) => {
     event.preventDefault();
     const taskId = event.dataTransfer.getData("taskId");
-    const user = getAuth().currentUser; 
+    const user = getAuth().currentUser;
     if (user && taskId) {
       try {
-        const taskRef = doc(db, `users/${user.uid}/tasks`, taskId); 
+        const taskRef = doc(db, `users/${user.uid}/tasks`, taskId);
         await updateDoc(taskRef, { priority: newPriority });
-        fetchTasks(user); 
+        fetchTasks(user);
       } catch (error) {
         console.error("Error updating task priority: ", error);
       }
@@ -68,24 +72,42 @@ const TodoList = () => {
     event.preventDefault();
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate("/login"); // Redirect to login after sign out
+    } catch (error) {
+      console.error("Error signing out: ", error);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        fetchTasks(user); 
+        fetchTasks(user);
       } else {
-        setTasks([]); 
+        setTasks([]);
       }
     });
 
-    return () => unsubscribe(); 
+    return () => unsubscribe();
   }, [auth]);
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-50 to-indigo-100 p-8">
       <div className="max-w-4xl mx-auto p-6 bg-white shadow-xl rounded-lg">
-        <h2 className="text-2xl font-bold text-indigo-600 text-center mb-6">
-          Your To-Do List
-        </h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-indigo-600">
+            Your To-Do List
+          </h2>
+          <button
+            onClick={handleLogout}
+            className="bg-red-500 text-white px-4 py-2 rounded-md shadow-md hover:bg-red-600 transition"
+          >
+            Logout
+          </button>
+        </div>
+
         <div className="mb-4 flex justify-between">
           <input
             type="text"
