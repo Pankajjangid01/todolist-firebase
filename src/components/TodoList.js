@@ -84,6 +84,7 @@ const TodoList = () => {
           collection(db, `users/${user.uid}/todoLists/${listId}/tasks`),
           {
             ...newTask,
+             priority: newTask.priority || "low"
           }
         );
         fetchTodoLists(user);
