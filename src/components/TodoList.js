@@ -20,7 +20,7 @@ const TodoList = () => {
   const auth = getAuth();
   const navigate = useNavigate();
 
-  // Fetch all To-Do Lists and tasks for the logged-in user
+  // Fetch To-Do lists
   const fetchTodoLists = async (user) => {
     if (user) {
       try {
@@ -66,7 +66,7 @@ const TodoList = () => {
     }
   };
 
-  // Handle input change for tasks, specific to each list
+  // Handle input change for tasks
   const handleTaskInputChange = (listId, field, value) => {
     setTaskInputs((prev) => ({
       ...prev,
@@ -74,7 +74,7 @@ const TodoList = () => {
     }));
   };
 
-  // Add a new task to a specific To-Do List
+  // Add a new task
   const addTask = async (listId) => {
     const user = getAuth().currentUser;
     const newTask = taskInputs[listId];
@@ -84,7 +84,7 @@ const TodoList = () => {
           collection(db, `users/${user.uid}/todoLists/${listId}/tasks`),
           {
             ...newTask,
-             priority: newTask.priority || "low"
+            priority: newTask.priority || "low",
           }
         );
         fetchTodoLists(user);
@@ -103,7 +103,70 @@ const TodoList = () => {
     }
   };
 
-  // Handle logout and redirect to login page
+  // Update task priority
+  const updateTaskPriority = async (listId, taskId, newPriority) => {
+    const user = getAuth().currentUser;
+    if (user) {
+      try {
+        const taskRef = doc(
+          db,
+          `users/${user.uid}/todoLists/${listId}/tasks`,
+          taskId
+        );
+        await updateDoc(taskRef, { priority: newPriority });
+        fetchTodoLists(user); // Refresh the data
+      } catch (error) {
+        console.error("Error updating task priority: ", error);
+      }
+    }
+  };
+
+  // Move a task to a different list
+  const moveTaskToAnotherList = async (
+    fromListId,
+    toListId,
+    task,
+    newPriority
+  ) => {
+    const user = getAuth().currentUser;
+    if (user) {
+      try {
+        // Add the task to the new list
+        const newTaskData = { ...task, priority: newPriority };
+        delete newTaskData.id;
+        await addDoc(
+          collection(db, `users/${user.uid}/todoLists/${toListId}/tasks`),
+          newTaskData
+        );
+
+        // Remove the task from the old list
+        await deleteDoc(
+          doc(db, `users/${user.uid}/todoLists/${fromListId}/tasks`, task.id)
+        );
+
+        // Immediately update UI without fetching data again
+        setTodoLists((prev) =>
+          prev.map((list) =>
+            list.id === fromListId
+              ? {
+                  ...list,
+                  tasks: list.tasks.filter((t) => t.id !== task.id),
+                }
+              : list.id === toListId
+              ? {
+                  ...list,
+                  tasks: [...list.tasks, { ...newTaskData, id: task.id }],
+                }
+              : list
+          )
+        );
+      } catch (error) {
+        console.error("Error moving task to another list: ", error);
+      }
+    }
+  };
+
+  // Handle logout
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -113,79 +176,32 @@ const TodoList = () => {
     }
   };
 
-  // Drag and drop for moving tasks between lists
+  // Drag and drop for moving tasks between lists or updating priority
   const handleDragStart = (task, fromListId) => {
     setDraggedTask({ ...task, fromListId });
   };
 
-  const handleDrop = async (toListId) => {
-    const user = getAuth().currentUser;
-    if (user && draggedTask) {
+  const handleDrop = async (toListId, newPriority = null) => {
+    if (draggedTask) {
       const fromListId = draggedTask.fromListId;
+      const isSameList = fromListId === toListId;
 
-      // If dropped in the same list, just ignore the move
-      if (fromListId === toListId) return;
-
-      try {
-        // Add to the new list
-        const newTaskData = { ...draggedTask };
-        delete newTaskData.id; // Firebase doesn't need the task ID
-        await addDoc(
-          collection(db, `users/${user.uid}/todoLists/${toListId}/tasks`),
-          newTaskData
-        );
-
-        // Remove from the old list
-        const taskRef = doc(
-          db,
-          `users/${user.uid}/todoLists/${fromListId}/tasks`,
-          draggedTask.id
-        );
-        await deleteDoc(taskRef);
-
-        // Update UI immediately
-        setTodoLists((prev) =>
-          prev.map((list) =>
-            list.id === toListId
-              ? { ...list, tasks: [...list.tasks, newTaskData] } // Add to new list
-              : list.id === fromListId
-              ? {
-                  ...list,
-                  tasks: list.tasks.filter(
-                    (task) => task.id !== draggedTask.id
-                  ),
-                } // Remove from old list
-              : list
-          )
-        );
-
-        setDraggedTask(null);
-      } catch (error) {
-        console.error("Error moving task: ", error);
+      if (newPriority) {
+        if (isSameList) {
+          // Update priority within the same list
+          await updateTaskPriority(fromListId, draggedTask.id, newPriority);
+        } else {
+          // Move task to a different list and update its priority
+          await moveTaskToAnotherList(
+            fromListId,
+            toListId,
+            draggedTask,
+            newPriority
+          );
+        }
       }
+      setDraggedTask(null);
     }
-  };
-
-  // Drag and drop for reordering tasks within the same list
-  const handleDropWithinSameList = (listId, taskId, dropPositionTaskId) => {
-    setTodoLists((prevLists) => {
-      return prevLists.map((list) => {
-        if (list.id !== listId) return list;
-
-        const draggedTaskIndex = list.tasks.findIndex(
-          (task) => task.id === taskId
-        );
-        const dropPositionTaskIndex = list.tasks.findIndex(
-          (task) => task.id === dropPositionTaskId
-        );
-
-        const updatedTasks = [...list.tasks];
-        const [removedTask] = updatedTasks.splice(draggedTaskIndex, 1);
-        updatedTasks.splice(dropPositionTaskIndex, 0, removedTask);
-
-        return { ...list, tasks: updatedTasks };
-      });
-    });
   };
 
   useEffect(() => {
@@ -196,7 +212,6 @@ const TodoList = () => {
         setTodoLists([]);
       }
     });
-
     return () => unsubscribe();
   }, [auth]);
 
@@ -229,7 +244,7 @@ const TodoList = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid lg:grid-cols-2 grid-cols-1 gap-4">
           {todoLists.map((list) => (
             <div
               key={list.id}
@@ -285,31 +300,44 @@ const TodoList = () => {
                 </select>
                 <button
                   onClick={() => addTask(list.id)}
-                  className="bg-indigo-500 text-white px-4 py-2 rounded-md shadow-md hover:bg-indigo-600 transition"
+                  className="block bg-indigo-500 text-white px-4 py-2 rounded-md shadow-md mt-2"
                 >
                   Add Task
                 </button>
               </div>
 
-              <ul className="space-y-4">
-                {list.tasks.map((task) => (
-                  <li
-                    key={task.id}
-                    draggable
-                    onDragStart={() => handleDragStart(task, list.id)}
-                    onDrop={() => handleDropWithinSameList(list.id, task.id)}
-                    className={`p-4 rounded-lg shadow-md ${
-                      task.priority === "high"
-                        ? "bg-red-300"
-                        : task.priority === "medium"
-                        ? "bg-yellow-300"
-                        : "bg-green-300"
-                    }`}
-                  >
-                    {task.title} (Priority: {task.priority}) - {task.dueDate}
-                  </li>
-                ))}
-              </ul>
+              {["low", "medium", "high"].map((priority) => (
+                <div
+                  key={priority}
+                  onDrop={() => handleDrop(list.id, priority)}
+                  onDragOver={(e) => e.preventDefault()}
+                  className={`p-4 rounded-lg shadow-md mt-2 ${
+                    priority === "high"
+                      ? "bg-red-300"
+                      : priority === "medium"
+                      ? "bg-yellow-300"
+                      : "bg-green-300"
+                  }`}
+                >
+                  <h4 className="font-semibold capitalize">
+                    {priority} Priority
+                  </h4>
+                  {list.tasks
+                    .filter((task) => task.priority === priority)
+                    .map((task) => (
+                      <div
+                        key={task.id}
+                        draggable
+                        onDragStart={() => handleDragStart(task, list.id)}
+                        className="bg-white p-2 mt-2 rounded-md shadow-md"
+                      >
+                        <h5 className="font-bold">{task.title}</h5>
+                        <p className="text-sm">{task.description}</p>
+                        <p className="text-xs text-gray-500">{task.dueDate}</p>
+                      </div>
+                    ))}
+                </div>
+              ))}
             </div>
           ))}
         </div>
