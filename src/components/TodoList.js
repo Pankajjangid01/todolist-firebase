@@ -204,6 +204,16 @@ const TodoList = () => {
     }
   };
 
+  const handleScrollOnDrag = (event) => {
+    const SCROLL_THRESHOLD = 100; 
+    const scrollStep = 10; 
+
+    if (event.clientY < SCROLL_THRESHOLD) {
+      window.scrollBy(0, -scrollStep);
+    } else if (window.innerHeight - event.clientY < SCROLL_THRESHOLD) {
+      window.scrollBy(0, scrollStep);
+    }
+  };
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -216,8 +226,11 @@ const TodoList = () => {
   }, [auth]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-50 to-indigo-100 p-8">
-      <div className="max-w-4xl mx-auto p-6 bg-white shadow-xl rounded-lg">
+    <div
+      className="min-h-screen bg-gradient-to-r from-blue-50 to-indigo-100 p-8"
+      onDragOver={handleScrollOnDrag}
+    >
+      <div className="max-w-4xl mx-auto p-6 bg-white shadow-xl rounded-lg overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-indigo-600">To-Do App</h2>
           <button
