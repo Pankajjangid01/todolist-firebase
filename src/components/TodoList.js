@@ -25,7 +25,7 @@ const TodoList = () => {
     if (user) {
       try {
         const querySnapshot = await getDocs(
-          collection(db, `users/${user.uid}/todoLists`)
+          collection(db, `users/$/todoLi{user.uid}sts`)
         );
         const fetchedLists = await Promise.all(
           querySnapshot.docs.map(async (listDoc) => {
@@ -57,6 +57,8 @@ const TodoList = () => {
       try {
         await addDoc(collection(db, `users/${user.uid}/todoLists`), {
           name: newListName,
+          createdBy: user.email,
+          createdAt: new Date(),
         });
         fetchTodoLists(user);
         setNewListName("");
@@ -205,8 +207,8 @@ const TodoList = () => {
   };
 
   const handleScrollOnDrag = (event) => {
-    const SCROLL_THRESHOLD = 100; 
-    const scrollStep = 10; 
+    const SCROLL_THRESHOLD = 100;
+    const scrollStep = 10;
 
     if (event.clientY < SCROLL_THRESHOLD) {
       window.scrollBy(0, -scrollStep);
