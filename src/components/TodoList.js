@@ -25,7 +25,7 @@ const TodoList = () => {
     if (user) {
       try {
         const querySnapshot = await getDocs(
-          collection(db, `users/$/todoLi{user.uid}sts`)
+          collection(db, `users/${user.uid}/todoLists`)
         );
         const fetchedLists = await Promise.all(
           querySnapshot.docs.map(async (listDoc) => {
