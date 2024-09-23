@@ -87,6 +87,7 @@ const TodoList = () => {
           {
             ...newTask,
             priority: newTask.priority || "low",
+            createdAt: new Date(),
           }
         );
         fetchTodoLists(user);
